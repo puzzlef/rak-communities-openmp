@@ -60,6 +60,7 @@ void runExperiment(const G& x, int repeat) {
 int main(int argc, char **argv) {
   using K = int;
   using V = TYPE;
+  install_sigsegv();
   char *file = argv[1];
   int repeat = argc>2? stoi(argv[2]) : 5;
   OutDiGraph<K, None, V> x;  // V w = 1;
