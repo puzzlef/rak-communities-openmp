@@ -12,3 +12,5 @@
 #include "modularity.hxx"
 #include "random.hxx"
 #include "rak.hxx"
+#include "rakClose.hxx"
+#include "rakMap.hxx"
