@@ -62,8 +62,14 @@ void runExperiment(const G& x) {
     );
   };
   // Find static RAK.
-  auto b1 = rakStaticOmp(x, init, {repeat});
-  flog(b1, "rakStaticOmp");
+  auto b1 = rakStaticOmp(x, init, {repeat, 0.05, 5});
+  flog(b1, "rakStaticOmpMax5");
+  auto b2 = rakStaticOmp(x, init, {repeat, 0.05, 10});
+  flog(b2, "rakStaticOmpMax10");
+  auto b3 = rakStaticOmp(x, init, {repeat, 0.05, 20});
+  flog(b3, "rakStaticOmpMax20");
+  auto b4 = rakStaticOmp(x, init, {repeat, 0.05, 50});
+  flog(b4, "rakStaticOmpMax50");
 }
 
 
