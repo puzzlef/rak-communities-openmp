@@ -220,6 +220,7 @@ inline pair<K, W> rakChooseCommunity(const G& x, K u, const vector<K>& vcom, con
 
 /**
  * Move each vertex to its best community.
+ * @param vbom brand new community each vertex belongs to (updated)
  * @param vcom community each vertex belongs to (updated)
  * @param vaff is vertex affected (updated)
  * @param vcs communities vertex u is linked to (updated)
@@ -227,26 +228,29 @@ inline pair<K, W> rakChooseCommunity(const G& x, K u, const vector<K>& vcom, con
  * @param x original graph
  * @returns number of changed vertices
  */
-template <class G, class K, class W, class B>
-inline size_t rakMoveIteration(vector<K>& vcom, vector<B>& vaff, vector<K>& vcs, vector<W>& vcout, const G& x) {
+template <bool SYNC=false, class G, class K, class W, class B>
+inline size_t rakMoveIteration(vector<K>& vbom, vector<K>& vcom, vector<B>& vaff, vector<K>& vcs, vector<W>& vcout, const G& x) {
   size_t a = 0;
+  if (SYNC) copyValuesW(vbom, vcom);
   x.forEachVertexKey([&](auto u) {
     if (!vaff[u]) return;
     K d = vcom[u];
     rakClearScan(vcs, vcout);
     rakScanCommunities(vcs, vcout, x, u, vcom);
     auto [c, w] = rakChooseCommunity(x, u, vcom, vcs, vcout);
-    if (c && c!=d) { vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); }); }
+    if (c && c!=d) { vbom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); }); }
     vaff[u] = B(0);
   });
+  if (SYNC) swap(vbom, vcom);
   return a;
 }
 
 #ifdef OPENMP
-template <class G, class K, class W, class B>
-inline size_t rakMoveIterationOmp(vector<K>& vcom, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x) {
+template <bool SYNC=false, class G, class K, class W, class B>
+inline size_t rakMoveIterationOmp(vector<K>& vbom, vector<K>& vcom, vector<B>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x) {
   size_t a = K();
   size_t S = x.span();
+  if (SYNC) copyValuesW(vbom, vcom);
   #pragma omp parallel for schedule(dynamic, 2048) reduction(+:a)
   for (K u=0; u<S; ++u) {
     int t = omp_get_thread_num();
@@ -256,9 +260,10 @@ inline size_t rakMoveIterationOmp(vector<K>& vcom, vector<B>& vaff, vector<vecto
     rakClearScan(*vcs[t], *vcout[t]);
     rakScanCommunities(*vcs[t], *vcout[t], x, u, vcom);
     auto [c, w] = rakChooseCommunity(x, u, vcom, *vcs[t], *vcout[t]);
-    if (c && c!=d) { vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); }); }
+    if (c && c!=d) { vbom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = B(1); }); }
     vaff[u] = B(0);
   }
+  if (SYNC) swap(vbom, vcom);
   return a;
 }
 #endif
@@ -269,7 +274,7 @@ inline size_t rakMoveIterationOmp(vector<K>& vcom, vector<B>& vaff, vector<vecto
 // RAK
 // ---
 
-template <class FLAG=char, class G, class K, class FM>
+template <bool SYNC=false, class FLAG=char, class G, class K, class FM>
 RakResult<K> rakSeq(const G& x, const vector<K>* q, const RakOptions& o, FM fm) {
   using V = typename G::edge_value_type;
   using W = RAK_WEIGHT_TYPE;
@@ -277,7 +282,7 @@ RakResult<K> rakSeq(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
   int l = 0;
   size_t S = x.span();
   size_t N = x.order();
-  vector<K> vcom(S), vcs;
+  vector<K> vbom(S), vcom(S), vcs;
   vector<W> vcout(S);
   vector<B> vaff(S);
   float tm = 0;
@@ -286,7 +291,7 @@ RakResult<K> rakSeq(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
     if (q) rakInitializeFrom(vcom, x, *q);
     else   rakInitialize(vcom, x);
     for (l=0; l<o.maxIterations;) {
-      size_t n = rakMoveIteration(vcom, vaff, vcs, vcout, x); ++l;
+      size_t n = rakMoveIteration<SYNC>(SYNC? vbom : vcom, vcom, vaff, vcs, vcout, x); ++l;
       if (double(n)/N <= o.tolerance) break;
     }
   }, o.repeat);
@@ -295,7 +300,7 @@ RakResult<K> rakSeq(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
 
 
 #ifdef OPENMP
-template <class FLAG=char, class G, class K, class FM>
+template <bool SYNC=false, class FLAG=char, class G, class K, class FM>
 RakResult<K> rakOmp(const G& x, const vector<K>* q, const RakOptions& o, FM fm) {
   using V = typename G::edge_value_type;
   using W = RAK_WEIGHT_TYPE;
@@ -304,7 +309,7 @@ RakResult<K> rakOmp(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
   int T = omp_get_max_threads();
   size_t S = x.span();
   size_t N = x.order();
-  vector<K> vcom(S);
+  vector<K> vbom(S), vcom(S);
   vector<B> vaff(S);
   vector<vector<K>*> vcs(T);
   vector<vector<W>*> vcout(T);
@@ -315,7 +320,7 @@ RakResult<K> rakOmp(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
     if (q) rakInitializeFromOmp(vcom, x, *q);
     else   rakInitializeOmp(vcom, x);
     for (l=0; l<o.maxIterations;) {
-      size_t n = rakMoveIterationOmp(vcom, vaff, vcs, vcout, x); ++l;
+      size_t n = rakMoveIterationOmp<SYNC>(SYNC? vbom : vcom, vcom, vaff, vcs, vcout, x); ++l;
       if (double(n)/N <= o.tolerance) break;
     }
   }, o.repeat);
@@ -330,16 +335,16 @@ RakResult<K> rakOmp(const G& x, const vector<K>* q, const RakOptions& o, FM fm) 
 // RAK STATIC
 // ----------
 
-template <class FLAG=char, class G, class K>
+template <bool SYNC=false, class FLAG=char, class G, class K>
 inline RakResult<K> rakStaticSeq(const G& x, const vector<K>* q=nullptr, const RakOptions& o={}) {
   auto fm = [](auto& vaff) { fillValueU(vaff, FLAG(1)); };
-  return rakSeq<FLAG>(x, q, o, fm);
+  return rakSeq<SYNC, FLAG>(x, q, o, fm);
 }
 
 #ifdef OPENMP
-template <class FLAG=char, class G, class K>
+template <bool SYNC=false, class FLAG=char, class G, class K>
 inline RakResult<K> rakStaticOmp(const G& x, const vector<K>* q=nullptr, const RakOptions& o={}) {
   auto fm = [](auto& vaff) { fillValueU(vaff, FLAG(1)); };
-  return rakOmp<FLAG>(x, q, o, fm);
+  return rakOmp<SYNC, FLAG>(x, q, o, fm);
 }
 #endif
