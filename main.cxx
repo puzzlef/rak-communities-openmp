@@ -65,18 +65,21 @@ void runExperiment(const G& x) {
   vector<K> *init = nullptr;
   double M = edgeWeightOmp(x)/2;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto flog = [&](const auto& ans, const char *technique) {
+  auto flog = [&](const auto& ans, const char *technique, int threads) {
     printf(
       "{%03d threads} -> "
       "{%09.1fms, %09.1fms mark, %09.1fms init, %04d iters, %01.9f modularity} %s\n",
-      MAX_THREADS,
+      threads,
       ans.time, ans.markingTime, ans.initializationTime,
       ans.iterations, getModularity(x, ans, M), technique
     );
   };
   // Find static RAK.
-  auto b1 = rakStaticOmp(x, {repeat});
-  flog(b1, "rakStaticOmp");
+  for (int t=1; t<=MAX_THREADS; t*=2) {
+    omp_set_num_threads(t);
+    auto b1 = rakStaticOmp(x, {repeat});
+    flog(b1, "rakStaticOmp", t);
+  }
 }
 
 
