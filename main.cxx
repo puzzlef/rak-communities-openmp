@@ -65,11 +65,11 @@ void runExperiment(const G& x) {
   vector<K> *init = nullptr;
   double M = edgeWeightOmp(x)/2;
   // Follow a specific result logging format, which can be easily parsed later.
-  auto flog = [&](const auto& ans, const char *technique) {
+  auto flog = [&](const auto& ans, const char *technique, int numThreads) {
     printf(
       "{%03d threads} -> "
       "{%09.1fms, %09.1fms mark, %09.1fms init, %09.1fms split, %.3e aff, %04d iters, %01.9f modularity, %zu/%zu disconnected} %s\n",
-      MAX_THREADS,
+      numThreads,
       ans.time, ans.markingTime, ans.initializationTime, ans.splittingTime,
       double(ans.affectedVertices),
       ans.iterations, getModularity(x, ans, M),
@@ -78,15 +78,11 @@ void runExperiment(const G& x) {
     );
   };
   // Find static RAK.
-  auto b0 = rakStaticOmp(x, {repeat});
-  flog(b0, "rakStaticOmp");
-  {
-    auto b1 = rakSplitLastStaticOmp<1>(x, {repeat});
-    flog(b1, "rakSplitLastStaticOmp1");
-    auto b2 = rakSplitLastStaticOmp<2>(x, {repeat});
-    flog(b2, "rakSplitLastStaticOmp2");
+  for (int numThreads=1; numThreads<=MAX_THREADS; numThreads*=2) {
+    omp_set_num_threads(numThreads);
     auto b4 = rakSplitLastStaticOmp<4>(x, {repeat});
-    flog(b4, "rakSplitLastStaticOmp4");
+    flog(b4, "rakSplitLastStaticOmp4", numThreads);
+    omp_set_num_threads(MAX_THREADS);
   }
 }
 
