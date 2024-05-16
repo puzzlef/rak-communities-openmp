@@ -286,17 +286,19 @@ inline pair<K, W> rakChooseCommunity(const G& x, K u, const vector<K>& vcom, con
  * @param fa is vertex allowed to be updated? (u)
  * @returns number of changed vertices
  */
-template <class G, class K, class W, class F, class FA>
+template <bool ISEVEN=false, class G, class K, class W, class F, class FA>
 inline size_t rakMoveIterationW(vector<K>& vcom, vector<F>& vaff, vector<K>& vcs, vector<W>& vcout, const G& x, FA fa) {
   size_t a = 0;
   x.forEachVertexKey([&](auto u) {
     if (!fa(u) || !vaff[u]) return;
+    vaff[u] = F(0);
     K d = vcom[u];
     rakClearScanW(vcs, vcout);
     rakScanCommunitiesW(vcs, vcout, x, u, vcom);
     auto [c, w] = rakChooseCommunity(x, u, vcom, vcs, vcout);
-    if (c && c!=d) { vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = F(1); }); }
-    vaff[u] = F(0);
+    if (!c || c==d) return;
+    if (ISEVEN && c>=d) return;
+    vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = F(1); });
   });
   return a;
 }
@@ -313,7 +315,7 @@ inline size_t rakMoveIterationW(vector<K>& vcom, vector<F>& vaff, vector<K>& vcs
  * @param fa is vertex allowed to be updated? (u)
  * @returns number of changed vertices
  */
-template <class G, class K, class W, class F, class FA>
+template <bool ISEVEN=false, class G, class K, class W, class F, class FA>
 inline size_t rakMoveIterationOmpW(vector<K>& vcom, vector<F>& vaff, vector<vector<K>*>& vcs, vector<vector<W>*>& vcout, const G& x, FA fa) {
   size_t a = K();
   size_t S = x.span();
@@ -322,12 +324,14 @@ inline size_t rakMoveIterationOmpW(vector<K>& vcom, vector<F>& vaff, vector<vect
     int t = omp_get_thread_num();
     if (!x.hasVertex(u)) continue;
     if (!fa(u) || !vaff[u]) continue;
+    vaff[u] = F(0);
     K d = vcom[u];
     rakClearScanW(*vcs[t], *vcout[t]);
     rakScanCommunitiesW(*vcs[t], *vcout[t], x, u, vcom);
     auto [c, w] = rakChooseCommunity(x, u, vcom, *vcs[t], *vcout[t]);
-    if (c && c!=d) { vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = F(1); }); }
-    vaff[u] = F(0);
+    if (!c || c==d) continue;
+    if (ISEVEN && c>=d) continue;
+    vcom[u] = c; ++a; x.forEachEdgeKey(u, [&](auto v) { vaff[v] = F(1); });
   }
   return a;
 }
@@ -372,7 +376,9 @@ inline auto rakInvoke(const G& x, const RakOptions& o, FI fi, FM fm, FA fa) {
     tm += measureDuration([&]() { fm(vaff, vcs, vcout, vcom); });
     // Perform iterations.
     for (l=0; l<o.maxIterations;) {
-      size_t n = rakMoveIterationW(vcom, vaff, vcs, vcout, x, fa); ++l;
+      size_t n = 0; ++l;
+      if (l%2 == 0) n = rakMoveIterationW<true> (vcom, vaff, vcs, vcout, x, fa);
+      else          n = rakMoveIterationW<false>(vcom, vaff, vcs, vcout, x, fa);
       if (double(n)/N <= o.tolerance) break;
     }
   }, o.repeat);
@@ -417,8 +423,10 @@ inline auto rakInvokeOmp(const G& x, const RakOptions& o, FI fi, FM fm, FA fa) {
     tm += measureDuration([&]() { fm(vaff, vcs, vcout, vcom); });
     // Perform iterations.
     for (l=0; l<o.maxIterations;) {
-      size_t n = rakMoveIterationOmpW(vcom, vaff, vcs, vcout, x, fa); ++l;
-      if (double(n)/N <= o.tolerance) break;
+      size_t n = 0; ++l;
+      if (l%2 == 0) n = rakMoveIterationOmpW<true> (vcom, vaff, vcs, vcout, x, fa);
+      else          n = rakMoveIterationOmpW<false>(vcom, vaff, vcs, vcout, x, fa);
+      if (double(n)/N <= o.tolerance && l%2 == 0 && l >= 6) break;
     }
   }, o.repeat);
   rakFreeHashtablesW(vcs, vcout);
