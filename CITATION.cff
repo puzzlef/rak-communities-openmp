@@ -4,7 +4,7 @@ authors:
   - family-names: Sahu
     given-names: Subhajit
     orcid: https://orcid.org/0000-0001-5140-6578
-title: "puzzlef/rak-communities-openmp: Design of OpenMP-based Label Propagation Algorithm (LPA) algorithm, aka RAK, for community detection"
-version: 2.0.0
-doi: 10.5281/zenodo.10403707
-date-released: 2023-12-19
+title: "GVE-LPA: Fast Label Propagation Algorithm (LPA) for Community Detection in Shared Memory Setting"
+version: 1.0.0
+doi: 10.48550/arXiv.2312.08140
+date-released: 2023-12-13
